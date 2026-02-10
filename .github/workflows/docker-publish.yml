@@ -2,11 +2,13 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ "main" ] # Tjek om din branch hedder main eller master
+    branches: [ "main" ]
+  workflow_dispatch: # Giver dig den manuelle 'Run workflow' knap på GitHub
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Cal.com builds kræver meget plads, så vi sikrer os, at GitHub Actions har nok
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,5 +30,9 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: victorlafargue/allio-booking:v1
+          # Vi optimerer hukommelsen til Node under selve buildet
           build-args: |
             NODE_OPTIONS=--max-old-space-size=4096
+          # Cache hjælper med at gøre efterfølgende builds hurtigere
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
