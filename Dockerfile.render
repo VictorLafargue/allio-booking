@@ -1,25 +1,29 @@
 # Brug en officiel Node image
 FROM node:18-alpine AS builder
 
-# Tilføj værktøjer til at bygge native moduler
+# Tilføj nødvendige værktøjer
 RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 COPY . .
 
-# Miljøvariable nødvendige for Cal.com build-processen
+# Miljøvariable til build - Vi tilføjer SKIP_ENV_VALIDATION
 ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
 ARG NEXT_PUBLIC_LICENSE_CONSENT=agree
 ARG NEXT_TELEMETRY_DISABLED=1
+ARG SKIP_ENV_VALIDATION=true
+ARG TURBO_TELEMETRY_DISABLED=1
 
 ENV NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL
 ENV NEXT_PUBLIC_LICENSE_CONSENT=$NEXT_PUBLIC_LICENSE_CONSENT
 ENV NEXT_TELEMETRY_DISABLED=$NEXT_TELEMETRY_DISABLED
+ENV SKIP_ENV_VALIDATION=$SKIP_ENV_VALIDATION
+ENV TURBO_TELEMETRY_DISABLED=$TURBO_TELEMETRY_DISABLED
 ENV NODE_ENV=production
 
 # Optimeret installation
 RUN yarn install --immutable
 
-# Her sker det tunge build - vi tildeler 6GB RAM direkte til processen
+# Her kører vi buildet med ekstra hukommelse
 RUN NODE_OPTIONS="--max-old-space-size=6144" yarn build
 
 # Production image
@@ -27,11 +31,9 @@ FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Kopier standalone build og statiske filer
 COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 
 EXPOSE 3000
-# Cal.com standalone server kører typisk fra denne sti
 CMD ["node", "apps/web/server.js"]
