@@ -1,39 +1,51 @@
-# Brug en officiel Node image
-FROM node:18-alpine AS builder
+FROM --platform=$BUILDPLATFORM node:20 AS builder
 
-# Tilføj nødvendige værktøjer
-RUN apk add --no-cache libc6-compat python3 make g++
-WORKDIR /app
-COPY . .
+WORKDIR /calcom
 
-# Miljøvariable til build - Vi tilføjer SKIP_ENV_VALIDATION
-ARG NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
-ARG NEXT_PUBLIC_LICENSE_CONSENT=agree
-ARG NEXT_TELEMETRY_DISABLED=1
+# Vi tilføjer SKIP_ENV_VALIDATION så den ikke brokker sig over manglende DB under build
 ARG SKIP_ENV_VALIDATION=true
-ARG TURBO_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_LICENSE_CONSENT=agree
 
-ENV NEXT_PUBLIC_WEBAPP_URL=$NEXT_PUBLIC_WEBAPP_URL
-ENV NEXT_PUBLIC_LICENSE_CONSENT=$NEXT_PUBLIC_LICENSE_CONSENT
-ENV NEXT_TELEMETRY_DISABLED=$NEXT_TELEMETRY_DISABLED
-ENV SKIP_ENV_VALIDATION=$SKIP_ENV_VALIDATION
-ENV TURBO_TELEMETRY_DISABLED=$TURBO_TELEMETRY_DISABLED
-ENV NODE_ENV=production
+ARG NEXT_PUBLIC_WEBSITE_TERMS_URL
+ARG NEXT_PUBLIC_WEBSITE_PRIVACY_POLICY_URL
+ARG CALCOM_TELEMETRY_DISABLED
+ARG DATABASE_URL
+ARG NEXTAUTH_SECRET=secret
+ARG CALENDSO_ENCRYPTION_KEY=secret
+ARG MAX_OLD_SPACE_SIZE=6144
+ARG NEXT_PUBLIC_API_V2_URL
+ARG CSP_POLICY
 
-# Optimeret installation
-RUN yarn install --immutable
+ENV NEXT_PUBLIC_WEBAPP_URL=http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER \
+  NEXT_PUBLIC_API_V2_URL=$NEXT_PUBLIC_API_V2_URL \
+  NEXT_PUBLIC_LICENSE_CONSENT=$NEXT_PUBLIC_LICENSE_CONSENT \
+  NEXT_PUBLIC_WEBSITE_TERMS_URL=$NEXT_PUBLIC_WEBSITE_TERMS_URL \
+  NEXT_PUBLIC_WEBSITE_PRIVACY_POLICY_URL=$NEXT_PUBLIC_WEBSITE_PRIVACY_POLICY_URL \
+  CALCOM_TELEMETRY_DISABLED=$CALCOM_TELEMETRY_DISABLED \
+  DATABASE_URL=$DATABASE_URL \
+  DATABASE_DIRECT_URL=$DATABASE_URL \
+  NEXTAUTH_SECRET=${NEXTAUTH_SECRET} \
+  CALENDSO_ENCRYPTION_KEY=${CALENDSO_ENCRYPTION_KEY} \
+  NODE_OPTIONS=--max-old-space-size=${MAX_OLD_SPACE_SIZE} \
+  BUILD_STANDALONE=true \
+  SKIP_ENV_VALIDATION=true \
+  NEXT_TELEMETRY_DISABLED=1
 
-# Her kører vi buildet med ekstra hukommelse
-RUN NODE_OPTIONS="--max-old-space-size=6144" yarn build
+# Resten af din officielle kode herunder...
+COPY package.json yarn.lock .yarnrc.yml playwright.config.ts turbo.json i18n.json ./
+COPY .yarn ./.yarn
+COPY apps/web ./apps/web
+COPY apps/api/v2 ./apps/api/v2
+COPY packages ./packages
 
-# Production image
-FROM node:18-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
+RUN yarn config set httpTimeout 1200000
+# Denne linje er magisk - den fjerner alt unødvendigt kode
+RUN npx turbo prune --scope=@calcom/web --scope=@calcom/trpc --docker
+RUN yarn install
 
-COPY --from=builder /app/apps/web/public ./apps/web/public
-COPY --from=builder /app/apps/web/.next/standalone ./
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+RUN yarn workspace @calcom/trpc run build
+RUN yarn --cwd packages/embeds/embed-core workspace @calcom/embed-core run build
+RUN yarn --cwd apps/web workspace @calcom/web run copy-app-store-static
+RUN yarn --cwd apps/web workspace @calcom/web run build
 
-EXPOSE 3000
-CMD ["node", "apps/web/server.js"]
+# ... fortsæt med builder-two og runner fra din tekst
