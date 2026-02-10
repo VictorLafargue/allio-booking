@@ -28,13 +28,12 @@ jobs:
           file: ./Dockerfile.render
           platforms: linux/amd64
           push: true
-          tags: ${{ secrets.S_DOCKERHUB_USERNAME }}/allio-booking:v1
-          # Vi tilføjer vigtige variabler her, som Next.js skal bruge under build
+          # RETTET HER: Fjernet det ekstra S_
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/allio-booking:v1
           build-args: |
             NODE_OPTIONS=--max-old-space-size=6144
             NEXT_PUBLIC_WEBAPP_URL=http://localhost:3000
             NEXT_PUBLIC_LICENSE_CONSENT=agree
             NEXT_TELEMETRY_DISABLED=1
-          # Cache gør at de næste builds kører meget hurtigere
           cache-from: type=gha
           cache-to: type=gha,mode=max
